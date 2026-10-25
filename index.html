@@ -2517,17 +2517,24 @@ THREE.Material.prototype.onBeforeCompile = function (sh) { if (sh.fog && sh.unif
 
 // r31 pixel: encuadre según el aspecto (ver build.js)
 const CAM0 = { h: CAM.h, back: CAM.back, ahead: CAM.ahead, fov: CAM.fov, followX: CAM.followX, near: scene.fog.near, far: scene.fog.far };
-const ENC = { hfovMax: 16 / 9, retrato: 1.13 }; // tope: tan(hfov/2) del 16:9; vertical: cámara x1.13 más lejos
+const ENC = { hfovMax: 16 / 9, retrato: 1.13, zoomH: 1.25, zoomFov: 1 }; // r32: zoom en celular apaisado
+function telApaisado() {
+  const W = innerWidth, H = innerHeight; if (W <= H) return false;
+  let t = false; try { t = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0; } catch (e) { /* sin matchMedia */ }
+  return (t && H <= 600) || H <= 500;
+} // tope: tan(hfov/2) del 16:9; vertical: cámara x1.13 más lejos
 function encuadre(a) {
   const D = Math.PI / 180, tv0 = Math.tan(CAM0.fov / 2 * D), tvCap = tv0 * ENC.hfovMax;
-  const tv = a > ENC.hfovMax ? tvCap / a : tv0;                        // tan(fov vertical / 2)
+  const z = a > 1 && telApaisado() ? ENC.zoomH : 1; CAM.zoom = z;  // r32: x1.25 en celular apaisado
+  const tvB = a > ENC.hfovMax ? tvCap / a : tv0, tv = tvB / Math.pow(z, ENC.zoomFov);                        // tan(fov vertical / 2)
   const s = a >= 1 ? 1 : a <= 0.75 ? ENC.retrato : 1 + (ENC.retrato - 1) * (1 - a) / 0.25; // vertical: un poco más lejos
   let h = CAM0.h, back = CAM0.back, ahead = CAM0.ahead;
   if (tv !== tv0 || s !== 1) {
     const p0 = Math.atan2(CAM0.h, CAM0.back + CAM0.ahead), al0 = Math.atan2(CAM0.h, CAM0.back);
     const kH = Math.tan(p0) / tv0, kC = Math.tan(al0 - p0) / tv0;      // horizonte y cuy en la pantalla (NDC)
     const p = Math.atan(kH * tv), al = p + Math.atan(kC * tv);         // misma altura en pantalla con el fov nuevo
-    const R = Math.hypot(CAM0.h, CAM0.back) * (tv0 / tv) * s;          // mismo tamaño de cuy (x 1/s)
+    const R = Math.hypot(CAM0.h, CAM0.back) * (tv0 / tvB) * s / Math.pow(z, 1 - ENC.zoomFov) // r32: el resto del x1.25
+      * (z === 1 ? 1 : Math.cos(Math.atan(kC * tvB)) / Math.cos(Math.atan(kC * tv))); // r32: misma PROFUNDIDAD del cuy en el eje de la cámara que r31 (no solo la misma distancia) -> x1.25 exacto          // mismo tamaño de cuy (x 1/s)
     h = R * Math.sin(al); back = R * Math.cos(al); ahead = h / Math.tan(p) - back;
   }
   CAM.h = h; CAM.back = back; CAM.ahead = ahead; CAM.fov = 2 * Math.atan(tv) / D;
