@@ -275,6 +275,26 @@ html, body { height: 100%; height: 100dvh; }
   body.movil:has(#title:not(.hidden)) .pz { white-space: nowrap; }
 }
 
+/* r36: pantalla de FIN DE PARTIDA en celular APAISADO — mismo esquema que el título r35, todo centrado en horizontal Y en vertical.
+   En orden: mensaje + frase; CUADRAS/RÉCORD y LUCAS/EN TOTAL (y "¡NUEVO RÉCORD!" si toca); la barra de la tómbola (centrada,
+   ancho r34); los 3 botones en UNA fila centrada (tamaño r34, con hueco para el sello ¡GRATIS! completo); al pie "Toca para otra vuelta".
+   Nada cambia de tamaño (fuentes r34). El bloque se centra respecto de la pantalla COMPLETA (zonas seguras): el mismo margen arriba
+   (borde -> mensaje) y abajo ("Toca para otra vuelta" -> borde). 09-titulo-pixel.js mide el bloque (su alto cambia con el mensaje),
+   pone --r36-top (margen superior), y deja --r36-pzt (dónde va la fila de botones). Si el mensaje choca en HORIZONTAL con la caja
+   del HUD (esquina superior izquierda), primero lo parte en más líneas sin pasar bajo el HUD (--r36-mw); si así no entra, baja
+   el bloque lo justo y, si hace falta, aprieta las separaciones (8px -> mín. 4px). Misma detección que r30–r35. */
+@media (max-height: 520px) and (orientation: landscape) {
+  body.movil #over { justify-content: flex-start; gap: var(--r36-g, 8px);
+    padding: var(--r35-st) max(16px, var(--r35-sr)) var(--r35-sb) max(16px, var(--r35-sl)); }
+  body.movil #over > * { margin-top: 0; margin-bottom: 0; flex: none; }
+  body.movil #over #deadMsg { margin-top: var(--r36-top, 0px); max-width: var(--r36-mw, 900px); }
+  body.movil #over::after { content: ''; order: 1; flex: none; height: var(--r36-pzh, 57px); } /* hueco de la fila de botones (sello + botones) */
+  body.movil #over .blink { order: 2; line-height: 16px; }
+  body.movil:has(#over:not(.hidden)) #premios { left: 50%; right: auto; transform: translateX(-50%); top: var(--r36-pzt, auto); bottom: auto;
+    flex-direction: row; flex-wrap: nowrap; align-items: stretch; justify-content: center; gap: 12px; width: max-content; max-width: calc(100vw - 16px); }
+  body.movil:has(#over:not(.hidden)) .pz { white-space: nowrap; }
+}
+
 </style>
 </head>
 <body>
@@ -4072,6 +4092,80 @@ try { if (window.visualViewport) { let q = 0; visualViewport.addEventListener('r
     const mo = new MutationObserver(pedir);
     for (const id of ['title', 'a2hs', 'hud']) { const e = document.getElementById(id); if (e) mo.observe(e, { attributes: true, attributeFilter: ['class', 'style'], childList: true, subtree: true, characterData: true }); }
     mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(pedir);
+    addEventListener('load', pedir);
+    pedir();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+
+// ============================================================
+// r36: pantalla de FIN DE PARTIDA en celular APAISADO (movil.css, bloque r36). Mismo criterio que el título r35: el bloque
+// (mensaje, frase, cuadras/récord, lucas, ¡nuevo récord!, barra, hueco de la fila de botones, "Toca para otra vuelta") se centra
+// en vertical en la pantalla completa: mismo margen arriba y abajo. Su alto cambia con el mensaje de muerte, así que se MIDE:
+//   1) separaciones 8px, sin límite de ancho -> margen f = (alto libre - alto del bloque) / 2.
+//   2) si con ese margen algo del bloque choca en HORIZONTAL con la caja real del HUD (o del aviso del iPhone): se prueba partir
+//      el mensaje en más líneas sin meterse bajo el HUD (--r36-mw). Si así entra centrado y sin chocar, queda así.
+//   3) si no, se vuelve al ancho normal y el bloque baja lo justo (2px bajo la caja); si abajo quedaran < 10px, se aprietan
+//      las separaciones (mín. 4px). Nada cambia de tamaño. La fila de botones (fija) se pone en su hueco (--r36-pzt).
+// Las variables van en <body>; en vertical, en PC o fuera del fin de partida no hay ninguna (no cambia nada).
+// ============================================================
+(() => {
+  const mq = matchMedia('(max-height: 520px) and (orientation: landscape)');
+  const SELLO = 11; // el sello ¡GRATIS! sobresale 11px sobre el botón TÓMBOLA (r34): el hueco lo incluye siempre
+  const VARS = ['--r36-top', '--r36-g', '--r36-mw', '--r36-pzh', '--r36-pzt'];
+  const vis = (el) => { if (!el || el.classList.contains('hidden')) return null; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none' ? r : null; };
+  let pend = false;
+  const poner = (o) => { const b = document.body; for (const k of VARS) { const v = o[k]; if (b.style.getPropertyValue(k) !== (v || '')) { if (v) b.style.setProperty(k, v); else b.style.removeProperty(k); } } };
+  const medir = () => {
+    pend = false;
+    const b = document.body, ov = document.getElementById('over'), pz = document.getElementById('premios');
+    if (!b || !ov) return;
+    if (!(mq.matches && b.classList.contains('movil') && !ov.classList.contains('hidden'))) { poner({}); return; }
+    const cs = getComputedStyle(ov), st = parseFloat(cs.paddingTop) || 0, sb = parseFloat(cs.paddingBottom) || 0;
+    const H = ov.getBoundingClientRect().height, W = ov.getBoundingClientRect().width;
+    const dead = document.getElementById('deadMsg'), blink = ov.querySelector('.blink');
+    if (!dead || !blink) return;
+    const pzH = pz && vis(pz) ? Math.round(pz.getBoundingClientRect().height) : 46;
+    const cajas = [document.getElementById('hud'), document.getElementById('a2hs')].map(vis).filter(Boolean);
+    const hijos = () => [...ov.children].filter((e) => vis(e));
+    // prueba una configuración: devuelve alto del bloque, margen centrado y cuánto habría que bajar para no chocar
+    const probar = (g, mw) => {
+      poner({ '--r36-g': g + 'px', '--r36-mw': mw ? mw + 'px' : '', '--r36-pzh': (pzH + SELLO) + 'px', '--r36-top': '0px' });
+      const t0 = dead.getBoundingClientRect().top, alto = blink.getBoundingClientRect().bottom - t0;
+      const f = Math.max(0, Math.floor((H - st - sb - alto) / 2));
+      const dy = st + f - t0; // posición final = actual + dy
+      let baja = 0;
+      const items = hijos().map((e) => e.getBoundingClientRect());
+      if (pz && vis(pz)) { const pw = pz.getBoundingClientRect().width, bt = blink.getBoundingClientRect().top; items.push({ left: (W - pw) / 2, right: (W + pw) / 2, top: bt - g - pzH - SELLO, bottom: bt - g }); }
+      for (const it of items) for (const c of cajas) {
+        const top = it.top + dy;
+        if (c.right > it.left && c.left < it.right && top < c.bottom + 2) baja = Math.max(baja, Math.ceil(c.bottom + 2 - top));
+      }
+      return { g, mw, alto, f, baja, top: f + baja, abajo: H - st - sb - alto - f - baja };
+    };
+    let r = probar(8, 0);
+    if (r.baja > 0 && cajas.length) { // 2) partir el mensaje en más líneas sin meterse bajo el HUD/aviso (centrado, mismos márgenes)
+      const lado = cajas.reduce((a, c) => Math.max(a, c.left < W / 2 ? c.right : W - c.left), 0);
+      const mw = Math.floor(W - 2 * (lado + 8));
+      if (mw >= 300) for (let gg = 8; gg >= 4; gg--) { const r2 = probar(gg, mw); if (r2.baja === 0 && r2.f >= 10 && r2.abajo >= 10) { r = r2; break; } }
+    }
+    if (r.baja > 0 && r.abajo < 10) { // 3) bajar lo justo; si abajo quedan < 10px, apretar separaciones (mín. 4px)
+      for (let gg = 7; gg >= 4; gg--) { const r3 = probar(gg, 0); r = r3; if (r3.abajo >= 10) break; }
+    }
+    const top = Math.max(0, Math.round(r.top)), g = r.g;
+    poner({ '--r36-g': g + 'px', '--r36-mw': r.mw ? r.mw + 'px' : '', '--r36-pzh': (pzH + SELLO) + 'px', '--r36-top': Math.max(0, Math.round(top)) + 'px' });
+    const pzt = Math.round(blink.getBoundingClientRect().top - g - pzH);
+    poner({ '--r36-g': g + 'px', '--r36-mw': r.mw ? r.mw + 'px' : '', '--r36-pzh': (pzH + SELLO) + 'px', '--r36-top': Math.max(0, Math.round(top)) + 'px', '--r36-pzt': pzt + 'px' });
+  };
+  const pedir = () => { if (!pend) { pend = true; requestAnimationFrame(medir); } };
+  const iniciar = () => {
+    addEventListener('resize', pedir); addEventListener('orientationchange', pedir);
+    if (mq.addEventListener) mq.addEventListener('change', pedir);
+    if (window.ResizeObserver) { const ro = new ResizeObserver(pedir); for (const id of ['hud', 'over', 'premios', 'deadMsg', 'deadQuip', 'tbBar', 'newBest']) { const e = document.getElementById(id); if (e) ro.observe(e); } }
+    const mo = new MutationObserver(pedir);
+    for (const id of ['over', 'hud', 'premios', 'a2hs']) { const e = document.getElementById(id); if (e) mo.observe(e, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true, characterData: true }); }
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true });
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(pedir);
     addEventListener('load', pedir);
     pedir();
