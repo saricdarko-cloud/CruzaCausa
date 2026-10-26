@@ -223,6 +223,15 @@ html, body { height: 100%; height: 100dvh; }
   body.movil #albumGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   body.movil .card { min-width: 0; min-height: 112px; } body.movil .card img { height: 56px; } body.movil .card .q { font-size: 42px; line-height: 56px; }
 }
+/* r34: primer giro de la tómbola GRATIS (sello en el botón, precio y botón de girar) */
+#pzTombola { position: relative; }
+#pzGratis { position: absolute; top: -11px; right: -8px; font: 900 11px "Courier New", Courier, monospace; font-style: normal; color: #d62828; background: #ffd23f;
+  border: 2px solid #2a1a10; padding: 1px 5px; transform: rotate(6deg); text-shadow: none; box-shadow: 2px 2px 0 #2a1a10; pointer-events: none; white-space: nowrap; }
+#pzGratis.hidden { display: none; }
+#tbPrecio.gratis { color: #ffd23f; font-weight: 900; }
+#tbSpin.gratis { background: #2a9d3a; }
+#tbPrecio::before { content: '· '; color: #fff; font-weight: 900; }
+@media (max-width: 600px) { #tombola .msaldo { flex-wrap: wrap; justify-content: center; row-gap: 2px; } #tbPrecio { flex-basis: 100%; text-align: center; } #tbPrecio::before { content: none; } }
 
 </style>
 </head>
@@ -259,7 +268,7 @@ html, body { height: 100%; height: 100dvh; }
 <!-- r29: premios (tómbola, regalo de la caserita, álbum de cuyes) -->
 <div id="premios" class="ui hidden">
   <button id="pzAlbum" class="pz ui" title="Álbum de cuyes (C)"><img id="pzCuyImg" alt=""><span><small>TU CUY · C</small><b id="pzCuyName">Cuy normal</b></span></button>
-  <button id="pzTombola" class="pz ui" title="Tómbola de la Causa (T)"><span class="ico">🎰</span><span><small>TÓMBOLA · T</small><b><span class="coinIco"></span><i id="pzSaldo">0</i> lucas</b></span></button>
+  <button id="pzTombola" class="pz ui" title="Tómbola de la Causa (T)"><span class="ico">🎰</span><em id="pzGratis" class="hidden">¡GRATIS!</em><span><small>TÓMBOLA · T</small><b><span class="coinIco"></span><i id="pzSaldo">0</i> lucas</b></span></button>
   <button id="pzRegalo" class="pz ui" title="Regalo de la caserita (G)"><span class="ico">🎁</span><span><small>CASERITA · G</small><b id="pzRegaloTxt"></b></span></button>
 </div>
 <div id="tombola" class="modal ui hidden">
@@ -268,9 +277,9 @@ html, body { height: 100%; height: 100dvh; }
     <div class="drumWrap"><div id="tbDrum" class="drum"><div class="drumIn"></div><div class="drumHub"></div></div><div class="drumLeg l"></div><div class="drumLeg r"></div></div>
     <div id="tbTicker" class="ticker"></div>
     <div id="tbResult" class="result hidden"><img alt=""><div><div class="rcat"></div><div class="rname"></div><div class="rnote"></div></div></div>
-    <div class="msaldo"><span class="coinIco"></span>Tienes <b id="tbSaldo">0</b> lucas · cada giro cuesta 100</div>
+    <div class="msaldo"><span class="coinIco"></span>Tienes <b id="tbSaldo">0</b> lucas <span id="tbPrecio">cada giro cuesta 150</span></div>
     <div class="mbtns"><button id="tbSpin" class="btn ui">GIRAR</button><button id="tbClose" class="btn sec ui">Cerrar</button></div>
-    <div class="msmall">14 comunes y 2 raros (dorado e Inca). Repetido: te devuelven 25 lucas. Los secretos no salen aquí.<br>ESPACIO gira · ESC cierra</div>
+    <div class="msmall">14 comunes y 2 raros (dorado e Inca). Repetido: te devuelven 10 lucas. Los secretos no salen aquí.<br>ESPACIO gira · ESC cierra</div>
   </div>
 </div>
 <div id="album" class="modal ui hidden">
@@ -3489,9 +3498,10 @@ const DISFRACES = [
   { id: 'millonario', name: 'Cuy millonario', cat: 'secreto', hint: 'Junta 1000 lucas en total' },
 ];
 const PREMIOS = {
-  COSTO: 100, DEVUELVE: 25,                 // giro de tómbola / devolución por repetido
+  COSTO: 150, DEVUELVE: 10, // r34 pixel: era 100 / 25                 // giro de tómbola / devolución por repetido
   PESO: { comun: 10, raro: 4 },             // comunes 140 / raros 8 de 148: un raro sale ~5.4 % de las veces (cada uno ~2.7 %)
-  REGALO: [20, 50], REGALO_CADA: 6 * 3600 * 1000,
+  REGALO: [25, 25], // r34 pixel: fijo 25 (era 20-50)
+  REGALO_CADA: 6 * 3600 * 1000,
   CAMPEON: 100, BUZO: 10, MILLONARIO: 1000,
   GIRO_MS: 2600,                            // animación de la tómbola (el sonido real dura 2.75 s)
   BANDERA_MIN: 3,                           // bandera de récord desde la cuadra 3
@@ -3512,6 +3522,7 @@ function makePremios(env) {
     ganadas: Number(LS.get('cruza_lucas_ganadas', NaN)),
     rio: Number(LS.get('cruza_rio_caidas', 0)) || 0,
     regaloT: Number(LS.get('cruza_regalo_t', 0)) || 0,
+    gratisUsado: LS.get('cruza_giro_gratis', '') === '1', // r34 pixel: primer giro gratis (una vez)
     gatos: new Set(),       // gatos de los que se escapó en ESTA partida
     modal: null,            // 'tombola' | 'album' | null
     spinning: false, lastSpin: null, log: null, logros: [],
@@ -3536,13 +3547,14 @@ function makePremios(env) {
   }
   // gira: cobra, sortea y guarda al toque (aunque se cierre la ventana durante la animación el premio ya es tuyo)
   function spin(forceId) {
-    if (st.spinning || Game.lucasTotal < PREMIOS.COSTO) return null;
-    setSaldo(Game.lucasTotal - PREMIOS.COSTO);
+    const gratis = !st.gratisUsado; // r34 pixel: el primer giro no cobra (aunque tengas 0 lucas)
+    if (st.spinning || (!gratis && Game.lucasTotal < PREMIOS.COSTO)) return null;
+    if (gratis) { st.gratisUsado = true; LS.set('cruza_giro_gratis', '1'); } else setSaldo(Game.lucasTotal - PREMIOS.COSTO);
     const id = forceId && byId[forceId] && byId[forceId].cat !== 'secreto' ? forceId : roll();
     const dup = !!st.owned[id];
     st.owned[id] = (st.owned[id] || 0) + 1; saveOwned();
     if (dup) setSaldo(Game.lucasTotal + PREMIOS.DEVUELVE);
-    st.lastSpin = { id, dup, cat: byId[id].cat, saldo: Game.lucasTotal };
+    st.lastSpin = { id, dup, cat: byId[id].cat, saldo: Game.lucasTotal, gratis };
     note('spin', st.lastSpin);
     return st.lastSpin;
   }
@@ -3630,13 +3642,14 @@ function makePremios(env) {
     const f = regaloFalta(), btn = $('pzRegalo');
     btn.classList.toggle('ready', f === 0); btn.disabled = f > 0;
     $('pzRegaloTxt').textContent = f === 0 ? '¡Reclama tu regalo!' : 'Próximo regalo en ' + hms(f);
-    $('pzTombola').classList.toggle('ready', Game.lucasTotal >= PREMIOS.COSTO);
+    $('pzTombola').classList.toggle('ready', !st.gratisUsado || Game.lucasTotal >= PREMIOS.COSTO);
+    { const g = $('pzGratis'); if (g) g.classList.toggle('hidden', st.gratisUsado); } // r34 pixel
     if ($('finalLucasTotal')) $('finalLucasTotal').textContent = Game.lucasTotal;
     // barra de fin de partida
     const k = Game.lucasTotal, bar = $('tbBar');
     if (bar) {
-      const enough = k >= PREMIOS.COSTO;
-      $('tbBarTxt').textContent = enough ? `¡Ya te alcanza para la tómbola! (${Math.floor(k / PREMIOS.COSTO)} giro${k >= 2 * PREMIOS.COSTO ? 's' : ''}) · pulsa T` : `Te faltan ${PREMIOS.COSTO - k} lucas para la tómbola`;
+      const enough = k >= PREMIOS.COSTO || !st.gratisUsado;
+      $('tbBarTxt').textContent = !st.gratisUsado ? '¡Tu primer giro en la tómbola es GRATIS! · pulsa T' : enough ? `¡Ya te alcanza para la tómbola! (${Math.floor(k / PREMIOS.COSTO)} giro${k >= 2 * PREMIOS.COSTO ? 's' : ''}) · pulsa T` : `Te faltan ${PREMIOS.COSTO - k} lucas para la tómbola`;
       $('tbBarFill').style.width = (enough ? 100 : (k / PREMIOS.COSTO) * 100).toFixed(1) + '%';
       bar.classList.toggle('full', enough);
     }
@@ -3650,8 +3663,12 @@ function makePremios(env) {
   const tb = $('tombola');
   function tbRefresh() {
     $('tbSaldo').textContent = Game.lucasTotal;
-    $('tbSpin').disabled = st.spinning || Game.lucasTotal < PREMIOS.COSTO;
-    $('tbSpin').textContent = Game.lucasTotal < PREMIOS.COSTO ? `Te faltan ${PREMIOS.COSTO - Game.lucasTotal} lucas` : `GIRAR (${PREMIOS.COSTO} lucas)`;
+    const gratis = !st.gratisUsado; // r34 pixel
+    $('tbPrecio').textContent = gratis ? '¡tu primer giro es GRATIS!' : 'cada giro cuesta ' + PREMIOS.COSTO;
+    $('tbPrecio').classList.toggle('gratis', gratis);
+    $('tbSpin').classList.toggle('gratis', gratis);
+    $('tbSpin').disabled = st.spinning || (!gratis && Game.lucasTotal < PREMIOS.COSTO);
+    $('tbSpin').textContent = gratis ? '¡GIRA GRATIS!' : Game.lucasTotal < PREMIOS.COSTO ? `Te faltan ${PREMIOS.COSTO - Game.lucasTotal} lucas` : `GIRAR (${PREMIOS.COSTO} lucas)`;
   }
   function open(which) {
     if (st.modal || !(Game.state === 'title' || Game.state === 'dead')) return false;
@@ -3767,9 +3784,10 @@ function makePremios(env) {
   // ganchos de prueba (__cruza.premios)
   const test = {
     DISFRACES, PREMIOS, roll, spin, regalo, regaloFalta, unlock, open, close, spinUi, select, key, refresh,
-    get state() { return { saldo: Game.lucasTotal, stored: Number(LS.get('cruza_lucas_total', 0)), ganadas: st.ganadas, owned: { ...st.owned }, sel: st.sel, rio: st.rio, regaloT: st.regaloT, gatos: [...st.gatos], modal: st.modal, spinning: st.spinning, lastSpin: st.lastSpin, logros: st.logros.slice() }; },
+    get state() { return { saldo: Game.lucasTotal, stored: Number(LS.get('cruza_lucas_total', 0)), ganadas: st.ganadas, owned: { ...st.owned }, sel: st.sel, rio: st.rio, regaloT: st.regaloT, gatos: [...st.gatos], modal: st.modal, spinning: st.spinning, gratis: !st.gratisUsado, lastSpin: st.lastSpin, logros: st.logros.slice() }; },
     get log() { return st.log; }, set log(v) { st.log = v; },
     setSaldo(n) { setSaldo(n); refresh(); }, setGanadas(n) { st.ganadas = n; LS.set('cruza_lucas_ganadas', n); },
+    setGratis(disponible) { st.gratisUsado = !disponible; if (disponible) { try { localStorage.removeItem('cruza_giro_gratis'); } catch (e) { /* */ } } else LS.set('cruza_giro_gratis', '1'); refresh(); }, // r34 pixel (pruebas)
     setRegaloT(t) { st.regaloT = t; LS.set('cruza_regalo_t', t); refresh(); }, setRio(n) { st.rio = n; LS.set('cruza_rio_caidas', n); },
     reset() { st.owned = {}; saveOwned(); st.sel = 'normal'; LS.set('cruza_cuy_sel', 'normal'); st.logros = []; st.gatos = new Set(); wear(); refresh(); },
     get skin() { return cuy ? cuy.skinId : null; }, hasArt: (id) => !!ASSETS['dz_' + id + '_front'],
