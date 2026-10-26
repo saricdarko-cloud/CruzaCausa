@@ -233,6 +233,48 @@ html, body { height: 100%; height: 100dvh; }
 #tbPrecio::before { content: '· '; color: #fff; font-weight: 900; }
 @media (max-width: 600px) { #tombola .msaldo { flex-wrap: wrap; justify-content: center; row-gap: 2px; } #tbPrecio { flex-basis: 100%; text-align: center; } #tbPrecio::before { content: none; } }
 
+/* r35 (VISTA PREVIA, v5 tras corrección de Darko): título en celular APAISADO — todo centrado en horizontal Y en vertical.
+   Arriba, en UNA fila, el cuy a la izquierda y el logo "¡CRUZA, / CAUSA!" a la derecha (dos líneas, centrado junto al cuy),
+   ambos al tamaño r34 (mismas reglas clamp de r34). Debajo, el lema y la caja de instrucciones tal cual r34; luego los 3 botones
+   en UNA fila (tamaño r34) y al pie "Toca para empezar".
+   v5: el bloque entero se centra en vertical respecto de la pantalla COMPLETA (borde superior y borde inferior, zonas seguras):
+   el mismo margen --r35-f arriba (borde -> cuy/logo, lo que quede más alto) y abajo ("Toca para empezar" -> borde).
+   El HUD (CUADRAS/LUCAS/RÉCORD) solo ocupa la esquina superior izquierda y la fila cuy+logo va centrada, así que el bloque puede
+   subir al centro superior sin tocarlo. Si la fila cuy+logo choca en HORIZONTAL con las cajas reales del HUD (crece con los
+   dígitos de LUCAS/RÉCORD) o del aviso del iPhone, 09-titulo-pixel.js lo mide y pone --r35-tope: el bloque baja solo lo
+   necesario para quedar 2px bajo esa caja (--r35-d) y, si hace falta, aprieta las separaciones para no pegarse abajo.
+   Alto del bloque = logo inclinado (~3px) + fila (alto del cuy r34) + 3 separaciones de 8px + lema 16 + caja ~104
+   + sello/botones 55 + "Toca" 16 + 3px. Separaciones 8px; solo si no entrara se achicarían (mín. 4px). Nada cambia de tamaño.
+   La parte de arriba (fila, lema, caja) cuelga del margen superior y la de abajo (botones, "Toca") del inferior.
+   Zonas seguras por variables (--r35-*) para poder simularlas en las pruebas. Misma detección que r30–r32. */
+@media (max-height: 520px) and (orientation: landscape) {
+  body.movil { --r35-st: env(safe-area-inset-top, 0px); --r35-sr: env(safe-area-inset-right, 0px); --r35-sb: env(safe-area-inset-bottom, 0px); --r35-sl: env(safe-area-inset-left, 0px);
+    --r35-vh: 100vh;
+    --r35-hud: calc(58px + var(--r35-st));                                   /* borde inferior del HUD (CUADRAS/RÉCORD) */
+    --r35-fila: clamp(60px, 22vh, 100px);                                    /* alto del cuy r34 = alto de la fila cuy/logo */
+    --r35-gb: 3px;                                                           /* botones -> "Toca para empezar" */
+    --r35-o: 3px;                                                            /* el logo inclinado sobresale ~3px sobre la fila */
+    --r35-resto: calc(var(--r35-vh) - var(--r35-st) - var(--r35-sb) - var(--r35-o) - var(--r35-fila) - 191px - var(--r35-gb)); /* libre: 3 separaciones + 2 márgenes */
+    --r35-g: clamp(4px, calc((var(--r35-resto) - 20px) / 3), 8px);         /* separaciones (8px; solo bajan si no entra) */
+    --r35-f: max(0px, calc((var(--r35-resto) - 3 * var(--r35-g)) / 2));    /* margen libre, igual arriba y abajo */
+    --r35-tope: 0px;                                                         /* 09-titulo-pixel.js: borde inferior (+2px) del HUD/aviso si chocan en horizontal con la fila */
+    --r35-d: max(0px, calc(var(--r35-tope) - var(--r35-st) - var(--r35-f))); /* lo que baja el bloque (0 si no choca) */
+    --r35-g2: min(var(--r35-g), max(4px, calc((var(--r35-f) - var(--r35-d) + 3 * var(--r35-g) - 10px) / 3))); /* al bajar, se aprietan las separaciones para dejar >=10px abajo */
+    --r35-fb: max(0px, calc(var(--r35-f) - var(--r35-d) + 3 * var(--r35-g) - 3 * var(--r35-g2))); } /* margen inferior (= --r35-f si no choca) */
+  @supports (height: 100dvh) { body.movil { --r35-vh: 100dvh; } }
+  body.movil #hud { top: calc(6px + var(--r35-st)); left: calc(10px + var(--r35-sl)); }
+  body.movil #title { display: grid; grid-template-columns: auto auto; grid-template-rows: var(--r35-fila) auto auto; justify-content: center; align-content: start;
+    column-gap: 10px; row-gap: var(--r35-g2);
+    padding: calc(var(--r35-st) + var(--r35-f) + var(--r35-d) + var(--r35-o)) max(16px, var(--r35-sr)) var(--r35-sb) max(16px, var(--r35-sl)); }
+  body.movil #titleCuy { grid-row: 1; grid-column: 1; justify-self: end; align-self: center; margin: 0; }
+  body.movil #title .logo { grid-row: 1; grid-column: 2; justify-self: start; align-self: center; }
+  body.movil #title .tag, body.movil #title .controls { grid-column: 1 / -1; justify-self: center; margin-top: 0; margin-bottom: 0; }
+  body.movil #title .blink { position: fixed; left: 0; right: 0; bottom: calc(var(--r35-sb) + var(--r35-fb)); margin: 0; line-height: 16px; }
+  body.movil:has(#title:not(.hidden)) #premios { left: 50%; right: auto; transform: translateX(-50%); bottom: calc(var(--r35-sb) + var(--r35-fb) + 16px + var(--r35-gb));
+    flex-direction: row; flex-wrap: nowrap; align-items: stretch; justify-content: center; gap: 12px; width: max-content; max-width: calc(100vw - 16px); }
+  body.movil:has(#title:not(.hidden)) .pz { white-space: nowrap; }
+}
+
 </style>
 </head>
 <body>
@@ -3991,6 +4033,51 @@ orientar();
 }
 // iOS: las barras de Safari aparecen/desaparecen sin cambiar de orientación; visualViewport avisa antes que window
 try { if (window.visualViewport) { let q = 0; visualViewport.addEventListener('resize', () => { if (q) return; q = requestAnimationFrame(() => { q = 0; orientar(); dispatchEvent(new Event('resize')); }); }); } } catch (e) { /* */ }
+
+// ---- 09-titulo-pixel.js ----
+// ============================================================
+// 09-titulo-pixel.js — r35 (SOLO Versión Pixel, vista previa): pantalla de título en celular APAISADO.
+// El bloque del título va centrado en vertical en la pantalla completa (movil.css, bloque r35). La fila cuy+logo puede
+// subir al centro superior porque el HUD (CUADRAS/LUCAS/RÉCORD) y el aviso del iPhone ocupan las esquinas. Aquí se mide
+// si la fila CHOCA EN HORIZONTAL con las cajas reales del HUD o del aviso (el HUD crece con los dígitos); si choca,
+// --r35-tope = borde inferior de esa caja + 2px y el CSS baja el bloque solo lo necesario. Si no, --r35-tope = 0.
+// Solo mueve en vertical, así que medir no cambia lo medido (sin vaivén). En PC y en vertical no hace nada.
+// ============================================================
+(() => {
+  const mq = matchMedia('(max-height: 520px) and (orientation: landscape)');
+  const box = (el) => { if (!el) return null; const r = el.getBoundingClientRect(); const cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' ? r : null; };
+  let pend = false;
+  const medir = () => {
+    pend = false;
+    const b = document.body, t = document.getElementById('title');
+    if (!b || !t) return;
+    let tope = 0;
+    if (mq.matches && b.classList.contains('movil') && !t.classList.contains('hidden')) {
+      const c = box(document.getElementById('titleCuy')), l = box(t.querySelector('.logo'));
+      if (c || l) {
+        const izq = Math.min(c ? c.left : 1e9, l ? l.left : 1e9), der = Math.max(c ? c.right : -1e9, l ? l.right : -1e9);
+        for (const o of [box(document.getElementById('hud')), box(document.getElementById('a2hs'))]) {
+          if (o && o.right > izq && o.left < der) tope = Math.max(tope, Math.ceil(o.bottom) + 2);
+        }
+      }
+    }
+    const v = tope ? tope + 'px' : '';
+    if (b.style.getPropertyValue('--r35-tope') !== v) { if (v) b.style.setProperty('--r35-tope', v); else b.style.removeProperty('--r35-tope'); }
+  };
+  const pedir = () => { if (!pend) { pend = true; requestAnimationFrame(medir); } };
+  const iniciar = () => {
+    addEventListener('resize', pedir); addEventListener('orientationchange', pedir);
+    if (mq.addEventListener) mq.addEventListener('change', pedir);
+    if (window.ResizeObserver) { const ro = new ResizeObserver(pedir); for (const id of ['hud', 'a2hs', 'title', 'titleCuy']) { const e = document.getElementById(id); if (e) ro.observe(e); } }
+    const mo = new MutationObserver(pedir);
+    for (const id of ['title', 'a2hs', 'hud']) { const e = document.getElementById(id); if (e) mo.observe(e, { attributes: true, attributeFilter: ['class', 'style'], childList: true, subtree: true, characterData: true }); }
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(pedir);
+    addEventListener('load', pedir);
+    pedir();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
 
 })();
 </script>
