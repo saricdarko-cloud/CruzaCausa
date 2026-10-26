@@ -295,6 +295,29 @@ html, body { height: 100%; height: 100dvh; }
   body.movil:has(#over:not(.hidden)) .pz { white-space: nowrap; }
 }
 
+/* r37: pantalla de FIN DE PARTIDA en celular VERTICAL. Antes el bloque de textos quedaba al medio y los 3 botones (Tu cuy +
+   Tómbola en una fila, Caserita debajo) pegados al borde inferior, sueltos. Ahora, en este orden y todo centrado en horizontal:
+   mensaje, frase, cuadras/récord, lucas, ¡nuevo récord!, barra de tómbola, los botones (mismo 2+1 y mismo tamaño; sello
+   ¡GRATIS! entero) y al final "Toca para otra vuelta". El bloque entero se centra en vertical en la pantalla completa
+   (mismo margen arriba y abajo, zonas seguras incluidas). 09-titulo-pixel.js (bloque r37) mide el bloque y pone:
+   --r37-top (margen de arriba), --r37-pzh (hueco de los botones, con el sello), --r37-pzt (dónde van los botones, que son fijos)
+   y, solo si no entrara, --r37-g (separaciones más chicas). Si chocara con el HUD, el bloque baja lo justo. Nada se achica.
+   Solo en vertical, con body.movil y con #over visible: el título, el apaisado (r36) y el PC no cambian.
+   Zonas seguras en variables (--r37-*) para poder simularlas en las pruebas. */
+@media (orientation: portrait) {
+  body.movil { --r37-st: env(safe-area-inset-top, 0px); --r37-sr: env(safe-area-inset-right, 0px); --r37-sb: env(safe-area-inset-bottom, 0px); --r37-sl: env(safe-area-inset-left, 0px); }
+  body.movil #over { justify-content: flex-start; padding-top: calc(var(--r37-st) + var(--r37-top, 0px)); padding-bottom: var(--r37-sb); }
+  body.movil[style*="--r37-g"] #over { gap: var(--r37-g); }
+  body.movil #over::after { content: ''; order: 1; flex: none; height: var(--r37-pzh, 0px); }
+  body.movil #over .blink { order: 2; }
+  body.movil[style*="--r37-pzt"]:has(#over:not(.hidden)) #premios { top: var(--r37-pzt); bottom: auto; }
+  /* toques: solo los botones (y la fila de arriba con su hueco y el sello) frenan el reinicio; al costado de Caserita se reinicia */
+  body.movil[style*="--r37-fw"]:has(#over:not(.hidden)) #premios { pointer-events: none; }
+  body.movil[style*="--r37-fw"]:has(#over:not(.hidden)) #premios .pz { pointer-events: auto; }
+  body.movil[style*="--r37-fw"]:has(#over:not(.hidden)) #premios::before { content: ''; position: absolute; left: var(--r37-fx); top: 0;
+    width: var(--r37-fw); height: var(--r37-fh); pointer-events: auto; z-index: -1; }
+}
+
 </style>
 </head>
 <body>
@@ -4157,6 +4180,78 @@ try { if (window.visualViewport) { let q = 0; visualViewport.addEventListener('r
     poner({ '--r36-g': g + 'px', '--r36-mw': r.mw ? r.mw + 'px' : '', '--r36-pzh': (pzH + SELLO) + 'px', '--r36-top': Math.max(0, Math.round(top)) + 'px' });
     const pzt = Math.round(blink.getBoundingClientRect().top - g - pzH);
     poner({ '--r36-g': g + 'px', '--r36-mw': r.mw ? r.mw + 'px' : '', '--r36-pzh': (pzH + SELLO) + 'px', '--r36-top': Math.max(0, Math.round(top)) + 'px', '--r36-pzt': pzt + 'px' });
+  };
+  const pedir = () => { if (!pend) { pend = true; requestAnimationFrame(medir); } };
+  const iniciar = () => {
+    addEventListener('resize', pedir); addEventListener('orientationchange', pedir);
+    if (mq.addEventListener) mq.addEventListener('change', pedir);
+    if (window.ResizeObserver) { const ro = new ResizeObserver(pedir); for (const id of ['hud', 'over', 'premios', 'deadMsg', 'deadQuip', 'tbBar', 'newBest']) { const e = document.getElementById(id); if (e) ro.observe(e); } }
+    const mo = new MutationObserver(pedir);
+    for (const id of ['over', 'hud', 'premios', 'a2hs']) { const e = document.getElementById(id); if (e) mo.observe(e, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true, characterData: true }); }
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(pedir);
+    addEventListener('load', pedir);
+    pedir();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+
+// ============================================================
+// r37: pantalla de FIN DE PARTIDA en celular VERTICAL (movil.css, bloque r37). Mismo criterio que r36 (apaisado): el bloque
+// (mensaje, frase, cuadras/récord, lucas, ¡nuevo récord!, barra, hueco de los botones, "Toca para otra vuelta") se centra en
+// vertical en la pantalla completa, mismo margen arriba y abajo; su alto cambia con el mensaje, así que se MIDE:
+//   1) separaciones las de siempre (gap del CSS) -> margen f = (alto libre - alto del bloque) / 2.
+//   2) si con ese margen algo choca con la caja real del HUD (CUADRAS/RÉCORD/LUCAS, crece con los dígitos) o del aviso del
+//      iPhone, el bloque baja lo justo (2px bajo la caja); si abajo quedaran < 10px, se aprietan las separaciones (mín. 4px).
+// Los botones (#premios, fijos, 2+1 como siempre) se ponen en su hueco (--r37-pzt). Nada cambia de tamaño.
+// Las variables van en <body>; en apaisado, en PC o fuera del fin de partida no hay ninguna (no cambia nada).
+// ============================================================
+(() => {
+  const mq = matchMedia('(orientation: portrait)');
+  const SELLO = 11; // el sello ¡GRATIS! sobresale 11px sobre el botón TÓMBOLA (r34): el hueco lo incluye siempre
+  const VARS = ['--r37-top', '--r37-g', '--r37-pzh', '--r37-pzt', '--r37-fx', '--r37-fw', '--r37-fh'];
+  const vis = (el) => { if (!el || el.classList.contains('hidden')) return null; const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none' ? r : null; };
+  let pend = false;
+  const poner = (o) => { const b = document.body; for (const k of VARS) { const v = o[k]; if (b.style.getPropertyValue(k) !== (v || '')) { if (v) b.style.setProperty(k, v); else b.style.removeProperty(k); } } };
+  const medir = () => {
+    pend = false;
+    const b = document.body, ov = document.getElementById('over'), pz = document.getElementById('premios');
+    if (!b || !ov) return;
+    if (!(mq.matches && b.classList.contains('movil') && !ov.classList.contains('hidden'))) { poner({}); return; }
+    const dead = document.getElementById('deadMsg'), blink = ov.querySelector('.blink');
+    if (!dead || !blink) return;
+    const pzOn = !!(pz && vis(pz));
+    const pzH = pzOn ? Math.round(pz.getBoundingClientRect().height) : 0, hueco = pzOn ? pzH + SELLO : 0;
+    const cajas = [document.getElementById('hud'), document.getElementById('a2hs')].map(vis).filter(Boolean);
+    const hijos = () => [...ov.children].filter((e) => vis(e));
+    const probar = (g) => { // g = null: separaciones del CSS
+      poner({ '--r37-g': g == null ? '' : g + 'px', '--r37-pzh': hueco + 'px', '--r37-top': '0px' });
+      const cs = getComputedStyle(ov), st = parseFloat(cs.paddingTop) || 0, sb = parseFloat(cs.paddingBottom) || 0, gap = parseFloat(cs.rowGap) || 0;
+      const H = ov.getBoundingClientRect().height, W = ov.getBoundingClientRect().width;
+      const t0 = dead.getBoundingClientRect().top, alto = blink.getBoundingClientRect().bottom - t0;
+      const f = Math.max(0, Math.floor((H - st - sb - alto) / 2));
+      const dy = st + f - t0;
+      let baja = 0;
+      const items = hijos().map((e) => e.getBoundingClientRect());
+      if (pzOn) { const pw = pz.getBoundingClientRect().width, bt = blink.getBoundingClientRect().top; items.push({ left: (W - pw) / 2, right: (W + pw) / 2, top: bt - gap - pzH - SELLO, bottom: bt - gap }); }
+      for (const it of items) for (const c of cajas) {
+        const top = it.top + dy;
+        if (c.right > it.left && c.left < it.right && top < c.bottom + 2) baja = Math.max(baja, Math.ceil(c.bottom + 2 - top));
+      }
+      return { g, gap, f, baja, top: f + baja, abajo: H - st - sb - alto - f - baja };
+    };
+    let r = probar(null);
+    if (r.baja > 0 && r.abajo < 10) for (let gg = Math.min(Math.floor(r.gap) - 1, 9); gg >= 4; gg--) { const r2 = probar(gg); r = r2; if (r2.abajo >= 10) break; }
+    const top = Math.max(0, Math.round(r.top)), g = r.g == null ? '' : r.g + 'px';
+    poner({ '--r37-g': g, '--r37-pzh': hueco + 'px', '--r37-top': top + 'px' });
+    if (pzOn) {
+      const pzt = Math.round(blink.getBoundingClientRect().top - r.gap - pzH), o = { '--r37-g': g, '--r37-pzh': hueco + 'px', '--r37-top': top + 'px', '--r37-pzt': pzt + 'px' };
+      poner(o);
+      // zona de toque de la fila de arriba (Tu cuy + hueco + Tómbola + sello): ahí no se reinicia; al costado de Caserita sí
+      const a = vis(document.getElementById('pzAlbum')), t = vis(document.getElementById('pzTombola')), p = pz.getBoundingClientRect();
+      if (a && t) { const l = Math.min(a.left, t.left), rr = Math.max(a.right, t.right), bb = Math.max(a.bottom, t.bottom);
+        o['--r37-fx'] = Math.round(l - p.left) + 'px'; o['--r37-fw'] = Math.round(rr - l) + 'px'; o['--r37-fh'] = Math.round(bb - p.top) + 'px'; poner(o); }
+    }
   };
   const pedir = () => { if (!pend) { pend = true; requestAnimationFrame(medir); } };
   const iniciar = () => {
