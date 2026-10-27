@@ -2336,7 +2336,7 @@ function makeGato(env) {
   const note = (ev, extra) => { if (log) log.push(Object.assign({ ev, i: cat.i, t: +cat.clock.toFixed(3), row: player.row, score: Game.score, cr: cat.r, cx: cat.x }, extra)); };
 
   function reset() {
-    plan = [{ T: 60, len: randInt(5, 6), done: false }, { T: randInt(90, 97), len: randInt(4, 5), done: false }];
+    plan = [{ T: randInt(55, 60) /* r40 pixel: cuadra 55-60 al azar */, len: randInt(5, 6), done: false }, { T: randInt(90, 97), len: randInt(4, 5), done: false }];
     cat.st = 'off'; cat.i = -1; root.visible = false;
   }
 
