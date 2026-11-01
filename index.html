@@ -1569,8 +1569,9 @@ class World {
           m.x += row.curSpeed * dt; if (m.brFast) this.brFastStep(row, m, dt, playerRow, sfx); // r42 pixel
           if (m.x > L) m.x -= 2 * L; else if (m.x < -L) m.x += 2 * L;
           m.group.position.x = m.x;
-          if (m.kind === 'log' || m.kind === 'totora') m.group.position.y = -0.3 + Math.sin(t * 2 + m.x) * (MF.gm ? 0.006 : 0.025);
-          if (MF.gm && m.gmLane === undefined) gmCarril(m, row); // r47 pixel
+          if (m.kind === 'log' || m.kind === 'totora') { m.group.position.y = -0.3 + Math.sin(t * 2 + m.x) * (MF.gm ? 0.006 : 0.025);
+            if (MF.gm && m.gmLane === undefined) gmCarril(m, row); // r47 pixel
+            if (MF.gm && m.gmLane > 0) gmTope(m, row); } // r49 pixel
           else if (m.rig) m.rig.update(dt, m.gmV !== undefined ? m.gmV : row.curSpeed, row.near); // r12: ruedas que giran + rebote por tipo
         }
         if (row.gmRoad) this.gmStep(row, dt, playerRow); // r45 pixel: baches, frenazos, camión, cola
@@ -2727,13 +2728,14 @@ World.prototype.gmStep = function (row, dt, playerRow) {
 // Los dibujos de la Grau son de costado (techo arriba del todo): se baja la malla GM_GRAU.HUNDE de su alto (la parte de
 // abajo queda bajo el asfalto/la fila de adelante) y el cuy viaja a la altura del techo (m.gmRoof, local al grupo).
 // El largo para montar (len) no cambia: la colisión horizontal es la misma de r45.
-const GM_GRAU = { HUNDE: 0.53, FONDO_HUNDE: 0.60, TECHO: 0.045, TECHO_FARDOS: 0.07 }; // r46b: 0.40 -> 0.60; r47: carril del muro 0.60 -> 0.53 (Darko: "un poquito más arriba, pero apenas", sin ruedas)
+const GM_GRAU = { HUNDE: 0.53, FONDO_HUNDE: 0.60, TECHO: 0.045, TECHO_FARDOS: 0.07, MARGEN: 0.03, VISTA: 0.65, ESC_MIN: 0.25, ALTO_MIN: 0.32, CERCA: 3, FUNDIDO: 3, SUBE: 0.05 }; // r46b: 0.40 -> 0.60; r47: carril del muro 0.60 -> 0.53 (Darko: "un poquito más arriba, pero apenas", sin ruedas)
 // r47 (Darko 01/11): solo el carril pegado al muro de abajo (inf.i = 0, el que tapa la vereda) va hundido; los carriles de atrás
 // van COMPLETOS (ruedas sobre el asfalto, r48: FONDO_HUNDE, enteros; sin sardinel). Los carros de adelante los tapan al pasar (depth).
 function gmLogSink(v) {
   if (!window.GMON) return v;
   const s = v.group.userData.sprite;
   v.gmY0 = s.position.y; // r47: base sin hundir (la de Mdl.log)
+  v.gmS0 = [s.scale.x, s.scale.y]; // r49b: tamaño original del dibujo (gmTope lo achica en tramos lejanos)
   gmCarrilY(v, s.position.y - GM_GRAU.HUNDE * s.scale.y); // por defecto como el carril del muro; gmCarril lo corrige con la fila
   return v;
 }
@@ -2750,8 +2752,11 @@ function gmCarril(v, row) {
   const i = row && row.inf ? row.inf.i : 0;
   v.gmLane = i;
   const sp = v.group.userData.sprite;
+  if (v.gmS0) { sp.scale.x = v.gmS0[0]; sp.scale.y = v.gmS0[1]; }
   gmCarrilY(v, v.gmY0 - (i > 0 ? GM_GRAU.FONDO_HUNDE : GM_GRAU.HUNDE) * sp.scale.y);
+  v.gmYBase = i > 0 ? sp.position.y : undefined; // r49: altura de r46; gmTope la baja si el techo asomaría
   gmCarrilVer(v, row, i);
+  if (i > 0) gmTope(v, row);
 }
 // r48 (Darko: "los carros de la segunda fila están muy altos" / "tiene que ser como la foto" / "que se corten lo necesario"):
 // los carriles de atrás vuelven a la altura de r46 (hundidos 0.60, igual que su foto), pero el carro se dibuja ENTERO:
@@ -2761,10 +2766,52 @@ function gmCarril(v, row) {
 function gmCarrilVer(v, row, i) {
   const sp = v.group.userData.sprite;
   if (row && row.waterTex && !row.gmAsfOrden) { row.gmAsfOrden = true; for (const c of row.group.children) if (c.material && c.material.map === row.waterTex) c.renderOrder = -3; }
-  if (i > 0 && !(row && row.clipPlanes) && !(sp.material.transparent && !v.gmMatAtras)) { // con puente (recorte, pasada transparente) queda como r46
-    if (!v.gmMatAtras) { v.gmMat0 = sp.material; v.gmMatAtras = sp.material.clone(); v.gmMatAtras.depthTest = false; }
+  if (i > 0) {
+    // r49: también con puente peatonal. Se clona el material que tenga (con planos de recorte si su fila tiene puente: el carro
+    // se oculta SOLO en el ancho del puente, en vertical) y va opaco, sin depthTest y escribiendo profundidad. El puente (pasada
+    // transparente, renderOrder 2) se dibuja después y lo tapa en su franja; carros de adelante y orilla lo tapan por profundidad.
+    if (!v.gmMatAtras || (sp.material !== v.gmMatAtras && sp.material !== v.gmMat0)) {
+      v.gmMat0 = sp.material; v.gmRO0 = sp.renderOrder;
+      const m = sp.material.clone(); m.depthTest = false;
+      if (m.clippingPlanes) { m.transparent = false; m.depthWrite = true; if (row && row.ownMats) row.ownMats.push(m); }
+      v.gmMatAtras = m;
+    }
     sp.material = v.gmMatAtras; sp.renderOrder = -2 - 0.01 * i;
-  } else if (v.gmMat0) { sp.material = v.gmMat0; sp.renderOrder = 0; }
+  } else if (v.gmMat0) { sp.material = v.gmMat0; sp.renderOrder = v.gmRO0 || 0; }
+}
+// r49 (Darko: "los carros de la segunda línea" asomaban sobre la vereda de enfrente): en los carriles de atrás el techo nunca
+// pasa el borde de enfrente de la pista. Cada cuadro se proyecta con la cámara real: el techo (mundo) tiene que verse por debajo
+// del pie del muro de enfrente (z de la orilla de enfrente, y del asfalto) con GM_GRAU.MARGEN de holgura. Si ya lo está a la
+// altura de r46 (FONDO_HUNDE, la de la foto) no cambia; si no, ESE carro se hunde lo justo (más los altos: combi, cúster, fardos).
+let gmCam = null, gmCAM = null;
+function gmSetCam(c, C) { gmCam = c; gmCAM = C || null; }
+function gmTope(v, row) {
+  if (v.gmYBase === undefined || !row || !row.inf) return;
+  const cam = gmCam; if (!cam) return; // (la cámara la registra 06-game: gmSetCam)
+  const sp = v.group.userData.sprite, S0 = v.gmS0 || [sp.scale.x, sp.scale.y], h0 = S0[1];
+  const d = (row.inf.n - 1 - row.inf.i) + 0.5;                 // del centro del carril al pie del muro de enfrente
+  const zl = row.group.position.z + v.group.position.z, zb = zl - d, zn = zl + row.inf.i + 0.5; // zn: borde de la vereda de adelante
+  const gy = row.group.position.y + v.group.position.y, yb = row.group.position.y - 0.3, yn = row.group.position.y;
+  const cy = cam.position.y, cz = cam.position.z;
+  if (cz - zb <= 0.01) return;
+  const yMax = cy + (yb - cy) * (cz - zl) / (cz - zb) - GM_GRAU.MARGEN; // techo (mundo) que se ve justo bajo ese borde
+  // r49b (Darko: en el tramo de más arriba solo se veían tiras de techo): la franja visible del carril (entre el pie del muro de
+  // enfrente y el borde de la vereda de adelante) se achica con la distancia más rápido que el carro. Si no alcanza para ver
+  // GM_GRAU.VISTA del carro, el carro entero (ancho y alto, sin deformar) se dibuja más chico, hasta ESC_MIN. Cerca (donde el cuy
+  // salta) la franja alcanza y queda en 1, igual que r49a.
+  let e = 1;
+  if (cz - zn > 0.01) { const yLow = cy + (yn - cy) * (cz - zl) / (cz - zn); const vh = yMax - yLow; if (vh < GM_GRAU.VISTA * h0) e = Math.max(Math.min(1, Math.max(GM_GRAU.ESC_MIN, GM_GRAU.ALTO_MIN / h0)), vh / (GM_GRAU.VISTA * h0)); // tope por tipo: ninguno queda más bajo que ALTO_MIN
+    // cerca del cuy (hasta CERCA filas delante de donde mira la cámara) el carro queda de su tamaño (r49a, la que Darko aprobó y
+    // donde se salta); de ahí se funde en FUNDIDO filas, siguiendo a la cámara (sin saltos)
+    const atras = gmCAM ? gmCAM.back : 5.6, k = Math.min(1, Math.max(0, ((cz - zl) - atras - GM_GRAU.CERCA) / GM_GRAU.FUNDIDO)), w = k * k * (3 - 2 * k);
+    e = 1 - w * (1 - e); }
+  if (Math.abs(sp.scale.y - h0 * e) > 1e-4) { sp.scale.x = S0[0] * e; sp.scale.y = h0 * e; }
+  const hs = sp.scale.y, base = v.gmY0 - GM_GRAU.FONDO_HUNDE * hs; // altura r46 (hundido 0.60 de su alto)
+  // r49c: si el carro se achicó (tramo lejano, franja angosta), se sube hasta que su techo quede justo bajo el pie del muro de
+  // enfrente, así se le ve lo mismo que en el tramo cercano (techo + ventanas) y no una tirita; lo de abajo lo tapa la orilla.
+  const yTope = yMax - gy - hs, t = Math.min(1, Math.max(0, (1 - e) / GM_GRAU.SUBE));
+  const y = Math.min(yTope, yTope > base ? base + t * (yTope - base) : base);
+  if (Math.abs(y - sp.position.y) > 1e-4 || e !== v.gmEsc) { v.gmEsc = e; gmCarrilY(v, y); }
 }
 // altura del cuy encima de una pieza de la Grau (o -0.12 de siempre si no es de Gamarra)
 function gmRideY(m) { return m && m.gmRoof !== undefined ? m.group.position.y + m.gmRoof : -0.12; }
@@ -3428,6 +3475,7 @@ scene.fog = new THREE.Fog('#d9e8ee', 20, 42);
 // Cámara 2.5D: detrás y encima del cuy, mirando hacia adelante (se ve el horizonte arriba)
 const CAM = { h: 5.2, back: 5.6, ahead: 7.2, followX: 0.8, fov: 52 };
 const camera = new THREE.PerspectiveCamera(CAM.fov, 16 / 9, 0.1, 200);
+gmSetCam(camera, CAM); // r49 pixel: gmTope proyecta con la cámara real
 
 // Fondo pintado: skyline de Lima (espejado a los lados para cubrir todo el ancho)
 const skyTex = Art.get('t_skyline').clone();
