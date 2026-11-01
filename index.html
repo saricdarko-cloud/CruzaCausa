@@ -2727,9 +2727,9 @@ World.prototype.gmStep = function (row, dt, playerRow) {
 // Los dibujos de la Grau son de costado (techo arriba del todo): se baja la malla GM_GRAU.HUNDE de su alto (la parte de
 // abajo queda bajo el asfalto/la fila de adelante) y el cuy viaja a la altura del techo (m.gmRoof, local al grupo).
 // El largo para montar (len) no cambia: la colisión horizontal es la misma de r45.
-const GM_GRAU = { HUNDE: 0.53, FONDO_Y: 0.01, TECHO: 0.045, TECHO_FARDOS: 0.07 }; // r46b: 0.40 -> 0.60; r47: carril del muro 0.60 -> 0.53 (Darko: "un poquito más arriba, pero apenas", sin ruedas)
+const GM_GRAU = { HUNDE: 0.53, FONDO_HUNDE: 0.60, TECHO: 0.045, TECHO_FARDOS: 0.07 }; // r46b: 0.40 -> 0.60; r47: carril del muro 0.60 -> 0.53 (Darko: "un poquito más arriba, pero apenas", sin ruedas)
 // r47 (Darko 01/11): solo el carril pegado al muro de abajo (inf.i = 0, el que tapa la vereda) va hundido; los carriles de atrás
-// van COMPLETOS (ruedas sobre el asfalto, FONDO_Y sobre la fila; sin sardinel). Los carros de adelante los tapan al pasar (depth).
+// van COMPLETOS (ruedas sobre el asfalto, r48: FONDO_HUNDE, enteros; sin sardinel). Los carros de adelante los tapan al pasar (depth).
 function gmLogSink(v) {
   if (!window.GMON) return v;
   const s = v.group.userData.sprite;
@@ -2744,12 +2744,27 @@ function gmCarrilY(v, y) {
   v.gmRoof = y + hs * (1 - top);
   v.gmSink = Math.max(0, v.gmY0 - y);
 }
-// r47: altura según el carril: inf.i = 0 (junto al muro de abajo) hundido HUNDE; los de atrás completos
+// r47/r48: altura según el carril: inf.i = 0 (junto al muro de abajo) hundido HUNDE; los de atrás FONDO_HUNDE (r46) pero enteros
 function gmCarril(v, row) {
   if (v.gmY0 === undefined) return;
   const i = row && row.inf ? row.inf.i : 0;
   v.gmLane = i;
-  gmCarrilY(v, i > 0 ? GM_GRAU.FONDO_Y : v.gmY0 - GM_GRAU.HUNDE * v.group.userData.sprite.scale.y);
+  const sp = v.group.userData.sprite;
+  gmCarrilY(v, v.gmY0 - (i > 0 ? GM_GRAU.FONDO_HUNDE : GM_GRAU.HUNDE) * sp.scale.y);
+  gmCarrilVer(v, row, i);
+}
+// r48 (Darko: "los carros de la segunda fila están muy altos" / "tiene que ser como la foto" / "que se corten lo necesario"):
+// los carriles de atrás vuelven a la altura de r46 (hundidos 0.60, igual que su foto), pero el carro se dibuja ENTERO:
+// el asfalto de la Grau se pinta primero (renderOrder -3) y el carro de atrás encima sin probar profundidad contra él
+// (renderOrder -2.x, depthTest off, depthWrite on). Lo que se pinta después (carros de adelante, muro, vereda, cuy) sí
+// prueba profundidad contra el carro: solo lo tapa lo que de verdad está delante. El carril de más atrás va primero.
+function gmCarrilVer(v, row, i) {
+  const sp = v.group.userData.sprite;
+  if (row && row.waterTex && !row.gmAsfOrden) { row.gmAsfOrden = true; for (const c of row.group.children) if (c.material && c.material.map === row.waterTex) c.renderOrder = -3; }
+  if (i > 0 && !(row && row.clipPlanes) && !(sp.material.transparent && !v.gmMatAtras)) { // con puente (recorte, pasada transparente) queda como r46
+    if (!v.gmMatAtras) { v.gmMat0 = sp.material; v.gmMatAtras = sp.material.clone(); v.gmMatAtras.depthTest = false; }
+    sp.material = v.gmMatAtras; sp.renderOrder = -2 - 0.01 * i;
+  } else if (v.gmMat0) { sp.material = v.gmMat0; sp.renderOrder = 0; }
 }
 // altura del cuy encima de una pieza de la Grau (o -0.12 de siempre si no es de Gamarra)
 function gmRideY(m) { return m && m.gmRoof !== undefined ? m.group.position.y + m.gmRoof : -0.12; }
