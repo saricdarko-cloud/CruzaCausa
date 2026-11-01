@@ -1570,6 +1570,7 @@ class World {
           if (m.x > L) m.x -= 2 * L; else if (m.x < -L) m.x += 2 * L;
           m.group.position.x = m.x;
           if (m.kind === 'log' || m.kind === 'totora') m.group.position.y = -0.3 + Math.sin(t * 2 + m.x) * (MF.gm ? 0.006 : 0.025);
+          if (MF.gm && m.gmLane === undefined) gmCarril(m, row); // r47 pixel
           else if (m.rig) m.rig.update(dt, m.gmV !== undefined ? m.gmV : row.curSpeed, row.near); // r12: ruedas que giran + rebote por tipo
         }
         if (row.gmRoad) this.gmStep(row, dt, playerRow); // r45 pixel: baches, frenazos, camión, cola
@@ -2610,6 +2611,7 @@ function gmRoadExtra(w, row, d) {
 // ---------- veredas: gente con bulto que camina (obstáculo móvil, no mata) + hinchas de Alianza ----------
 function gmRowPost(w, row) {
   const t = row.type, H = CFG.HALF;
+  if (t === 'river') { for (const m of row.movers) gmCarril(m, row); return; } // r47: Grau, altura por carril
   if (t === 'road' || t === 'river' || t === 'rail' || t === 'park' || row.r < 4 || (row.inf && row.inf.seg && row.inf.seg.start)) return;
   if (w.gmHinchaNext === undefined) w.gmHinchaNext = row.r + randInt(8, 15);
   const hincha = row.r >= w.gmHinchaNext;
@@ -2725,15 +2727,29 @@ World.prototype.gmStep = function (row, dt, playerRow) {
 // Los dibujos de la Grau son de costado (techo arriba del todo): se baja la malla GM_GRAU.HUNDE de su alto (la parte de
 // abajo queda bajo el asfalto/la fila de adelante) y el cuy viaja a la altura del techo (m.gmRoof, local al grupo).
 // El largo para montar (len) no cambia: la colisión horizontal es la misma de r45.
-const GM_GRAU = { HUNDE: 0.60, TECHO: 0.045, TECHO_FARDOS: 0.07 }; // r46b: 0.40 -> 0.60 (Darko 23:03: 50 % más abajo, sin ruedas a la vista)
+const GM_GRAU = { HUNDE: 0.53, FONDO_Y: 0.01, TECHO: 0.045, TECHO_FARDOS: 0.07 }; // r46b: 0.40 -> 0.60; r47: carril del muro 0.60 -> 0.53 (Darko: "un poquito más arriba, pero apenas", sin ruedas)
+// r47 (Darko 01/11): solo el carril pegado al muro de abajo (inf.i = 0, el que tapa la vereda) va hundido; los carriles de atrás
+// van COMPLETOS (ruedas sobre el asfalto, FONDO_Y sobre la fila; sin sardinel). Los carros de adelante los tapan al pasar (depth).
 function gmLogSink(v) {
   if (!window.GMON) return v;
-  const s = v.group.userData.sprite, hs = s.scale.y, cut = GM_GRAU.HUNDE * hs;
-  s.position.y -= cut;
-  const top = /tabla/.test(v.variant) ? GM_GRAU.TECHO_FARDOS : GM_GRAU.TECHO;
-  v.gmRoof = s.position.y + hs * (1 - top);
-  v.gmSink = cut;
+  const s = v.group.userData.sprite;
+  v.gmY0 = s.position.y; // r47: base sin hundir (la de Mdl.log)
+  gmCarrilY(v, s.position.y - GM_GRAU.HUNDE * s.scale.y); // por defecto como el carril del muro; gmCarril lo corrige con la fila
   return v;
+}
+function gmCarrilY(v, y) {
+  const s = v.group.userData.sprite, hs = s.scale.y;
+  s.position.y = y;
+  const top = /tabla/.test(v.variant) ? GM_GRAU.TECHO_FARDOS : GM_GRAU.TECHO;
+  v.gmRoof = y + hs * (1 - top);
+  v.gmSink = Math.max(0, v.gmY0 - y);
+}
+// r47: altura según el carril: inf.i = 0 (junto al muro de abajo) hundido HUNDE; los de atrás completos
+function gmCarril(v, row) {
+  if (v.gmY0 === undefined) return;
+  const i = row && row.inf ? row.inf.i : 0;
+  v.gmLane = i;
+  gmCarrilY(v, i > 0 ? GM_GRAU.FONDO_Y : v.gmY0 - GM_GRAU.HUNDE * v.group.userData.sprite.scale.y);
 }
 // altura del cuy encima de una pieza de la Grau (o -0.12 de siempre si no es de Gamarra)
 function gmRideY(m) { return m && m.gmRoof !== undefined ? m.group.position.y + m.gmRoof : -0.12; }
@@ -4361,7 +4377,7 @@ window.__cruza = {
     return { name, len: v.len, w: v.group.userData.w, dir: row.dir };
   },
   // sube al cuy a la pieza del canal r, a `off` del centro de la pieza; setOff lo corre sobre la misma pieza
-  mount(r, off = 0, i = 0) { const row = world.get(r); const m = row.movers[i]; this.warp(r, m.x + off); player.riding = m; player.y = MF.gm ? gmRideY(m) : -0.12; },
+  mount(r, off = 0, i = 0) { const row = world.get(r); const m = row.movers[i]; this.warp(r, m.x + off); player.riding = m; if (MF.gm) gmCarril(m, row); player.y = MF.gm ? gmRideY(m) : -0.12; }, lanes() { return [...world.rows.values()].filter((q) => q.type === 'river').map((q) => ({ r: q.r, i: q.inf.i, n: q.inf.n, cars: q.movers.map((m) => ({ v: m.variant, lane: m.gmLane, y: m.group.userData.sprite.position.y, hs: m.group.userData.sprite.scale.y, roof: m.gmRoof, sink: m.gmSink })) })); }, // r47 pruebas
   get py() { return player.y; }, roofY() { return player.riding ? gmRideY(player.riding) : null; }, parts() { return Game.particles.map((q) => '#' + q.mesh.material.color.getHexString()); }, get cuyScale() { return player.model.body.scale.x; }, get cuyRot() { return player.model.root.rotation.z; }, // r46 pruebas
   setOff(off) { if (player.riding) player.x = player.riding.x + off; },
   get riding() { const m = player.riding; return m ? { variant: m.variant, len: m.len, off: player.x - m.x } : null; },
