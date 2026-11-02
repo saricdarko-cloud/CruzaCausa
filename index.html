@@ -381,7 +381,7 @@ html, body { height: 100%; height: 100dvh; }
     <div id="tbResult" class="result hidden"><img alt=""><div><div class="rcat"></div><div class="rname"></div><div class="rnote"></div></div></div>
     <div class="msaldo"><span class="coinIco"></span>Tienes <b id="tbSaldo">0</b> lucas <span id="tbPrecio">cada giro cuesta 150</span></div>
     <div class="mbtns"><button id="tbSpin" class="btn ui">GIRAR</button><button id="tbClose" class="btn sec ui">Cerrar</button></div>
-    <div class="msmall">14 comunes y 2 raros (dorado e Inca). Repetido: te devuelven 10 lucas. Los secretos no salen aquí.<br>ESPACIO gira · ESC cierra</div>
+    <div class="msmall">14 comunes y 2 raros (dorado e Inca). Repetido: te devuelven 30 lucas. Los secretos no salen aquí.<br>ESPACIO gira · ESC cierra</div>
   </div>
 </div>
 <div id="album" class="modal ui hidden">
@@ -4516,7 +4516,7 @@ const DISFRACES = [
   { id: 'millonario', name: 'Cuy millonario', cat: 'secreto', hint: 'Junta 1000 lucas en total' },
 ];
 const PREMIOS = {
-  COSTO: 150, DEVUELVE: 10, // r34 pixel: era 100 / 25                 // giro de tómbola / devolución por repetido
+  COSTO: 150, DEVUELVE: 30, // r34 pixel: era 100 / 25; r51: repetido devuelve 30 (era 10)                 // giro de tómbola / devolución por repetido
   PESO: { comun: 10, raro: 4 },             // comunes 140 / raros 8 de 148: un raro sale ~5.4 % de las veces (cada uno ~2.7 %)
   REGALO: [25, 25], // r34 pixel: fijo 25 (era 20-50)
   REGALO_CADA: 6 * 3600 * 1000,
@@ -4748,7 +4748,7 @@ function makePremios(env) {
       else c.innerHTML = `<img alt=""><div class="cn"></div><div class="cc"></div>`;
       const im = c.querySelector('img'); if (im) im.src = art(id);
       const cn = c.querySelector('.cn'); if (cn && (got || d.cat !== 'secreto')) cn.textContent = name(id);
-      const cc = c.querySelector('.cc'); if (cc) cc.textContent = id === 'normal' ? 'De fábrica' : !got ? (d.cat === 'raro' ? 'Raro · tómbola' : 'Tómbola') : (st.owned[id] > 1 ? `×${st.owned[id]} · ` : '') + CAT_TXT[d.cat];
+      const cc = c.querySelector('.cc'); if (cc) cc.textContent = id === 'normal' ? 'De fábrica' : !got ? (d.cat === 'raro' ? 'Raro · tómbola' : 'Tómbola') : CAT_TXT[d.cat]; // r51 pixel: sin contador de repetidos (era ×N)
       c.addEventListener('click', () => { st.albumI = i; select(id); });
       grid.appendChild(c);
     });
