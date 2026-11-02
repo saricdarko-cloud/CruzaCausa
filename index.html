@@ -335,6 +335,42 @@ html, body { height: 100%; height: 100dvh; }
 @keyframes mfEdgeP { 50% { transform: translate(-50%, -50%) scale(1.15); } }
 @media (orientation: landscape) and (max-height: 500px) { #mfBanner { top: 8%; padding: 6px 18px 8px; } #mfBanner b { font-size: 20px; } }
 
+/* r52: "Comparte y gana 50 lucas" (src-pixel/10-compartir-pixel.js; diseño Revisiones/r52-diseno) */
+#pzShareW { display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: auto; }
+body:not(:has(#over:not(.hidden))) #pzShareW { display: none; }
+#pzShare { background: #ffd23f; color: #2a1a10; text-shadow: none; justify-content: center; animation: pzGlow 1s ease-in-out infinite alternate; white-space: nowrap; }
+#pzShare b { color: #2a1a10; font-size: 20px; } #pzShare small { color: #7a3d00; opacity: 1; font-weight: 900; }
+#pzShare .ico { font-size: 30px; }
+#pzShare .shBadge { background: #d62828; color: #fff; font-weight: 900; font-size: 13px; padding: 3px 6px; border: 2px solid #2a1a10; display: flex; align-items: center; gap: 4px; text-shadow: 1px 1px 0 #2a1a10; }
+#pzShare.cobrado { background: rgba(42,26,16,.88); color: #fff; animation: none; }
+#pzShare.cobrado b { color: #fff; font-size: 15px; } #pzShare.cobrado small { color: #fff; opacity: .85; }
+#pzShareNota { font-weight: 900; font-size: 13px; color: #ffd23f; text-shadow: 2px 2px 0 #2a1a10; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+#pzShareNota.hidden { display: none; }
+@media (orientation: portrait) {
+  #pzShareW { order: 9; flex-basis: 100%; }
+  #pzShare:not(.cobrado) { width: 100%; min-height: 62px; box-sizing: border-box; }
+}
+@media (orientation: landscape) {
+  #pzShare { padding: 4px 10px; } #pzShare b { font-size: 15px; } #pzShare.cobrado b { font-size: 13px; }
+  #pzShareNota { display: none !important; }
+  #pzShare.cobrado small { font-size: 0; } #pzShare.cobrado small::after { content: 'MAÑANA +50 LUCAS'; font-size: 10px; }
+}
+#pzShareMenu { position: fixed; z-index: 7; right: calc(12px + env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 96px);
+  flex-direction: column; gap: 2px; padding: 6px 10px; }
+#pzShareMenu small { font-weight: 900; }
+body:not(:has(#title:not(.hidden))) #pzShareMenu, body:has(.modal:not(.hidden)) #pzShareMenu { display: none; }
+.shBub { position: absolute; top: -24px; right: -4px; background: #d62828; color: #fff; border: 2px solid #fff; box-shadow: 2px 2px 0 #2a1a10;
+  font-weight: 900; font-size: 11px; padding: 2px 6px; white-space: nowrap; text-shadow: 1px 1px 0 #2a1a10; display: flex; gap: 4px; align-items: center; }
+.shBub::after { content: ''; position: absolute; right: 14px; bottom: -8px; border: 6px solid transparent; border-top-color: #fff; border-bottom: 0; }
+.shBub.hidden { display: none; }
+#shareOk { z-index: 50; } #shareOk .mbox { width: min(340px, 92vw); }
+#shareOk .result { width: 100%; box-sizing: border-box; } #shareOk .result img { height: 84px; image-rendering: pixelated; }
+#shareOk .rname { font-weight: 900; font-size: 28px; white-space: nowrap; } #shareOk .rnote b { color: inherit; }
+.shFly { position: fixed; left: 0; top: 0; width: 30px; height: 30px; z-index: 60; pointer-events: none; image-rendering: pixelated; }
+.shMas { position: fixed; z-index: 61; pointer-events: none; font-weight: 900; font-size: 20px; color: #ffd23f; text-shadow: 2px 2px 0 #d62828, 4px 4px 0 #2a1a10; animation: shMas 2.4s ease-out forwards; }
+@keyframes shMas { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+#lucas.shPulse { animation: shPulse .5s ease-out 2 .7s; } @keyframes shPulse { 50% { transform: scale(1.25); } }
+
 </style>
 </head>
 <body>
@@ -3583,6 +3619,7 @@ const gato = makeGato({ scene, player, Game, world: () => world, danger: (r, x, 
   sfx: (n) => Sfx.play(n, 1, 0.97 + Math.random() * 0.06, 0, 'gato'), escaped: (i) => premios.onCatEscape(i) });
 // r29: tómbola, regalo, álbum, logros y bandera de récord (src/07-premios.js; solo cosmético)
 const premios = makePremios({ Game, Sfx, scene, $, cuy: player.model });
+shareBind({ Game, premios, toast }); // r52 pixel
 
 let world = null;
 let camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
@@ -3770,6 +3807,7 @@ function gameOver() {
   $('newBest').classList.toggle('hidden', !isBest || Game.score === 0);
   $('over').classList.remove('hidden');
   $('warn').style.display = 'none';
+  shareOnGameOver(isBest); // r52 pixel
   premios.onGameOver(); // r29: barra "te faltan X lucas", bandera nueva si hubo récord
   updateHud();
 }
@@ -4804,6 +4842,7 @@ function makePremios(env) {
     DISFRACES, PREMIOS, roll, spin, regalo, regaloFalta, unlock, open, close, spinUi, select, key, refresh,
     get state() { return { saldo: Game.lucasTotal, stored: Number(LS.get('cruza_lucas_total', 0)), ganadas: st.ganadas, owned: { ...st.owned }, sel: st.sel, rio: st.rio, regaloT: st.regaloT, gatos: [...st.gatos], modal: st.modal, spinning: st.spinning, gratis: !st.gratisUsado, lastSpin: st.lastSpin, logros: st.logros.slice() }; },
     get log() { return st.log; }, set log(v) { st.log = v; },
+    bonus(n) { setSaldo(Game.lucasTotal + n); ganar(n); note('compartir', { n }); refresh(); }, // r52 pixel
     setSaldo(n) { setSaldo(n); refresh(); }, setGanadas(n) { st.ganadas = n; LS.set('cruza_lucas_ganadas', n); },
     setGratis(disponible) { st.gratisUsado = !disponible; if (disponible) { try { localStorage.removeItem('cruza_giro_gratis'); } catch (e) { /* */ } } else LS.set('cruza_giro_gratis', '1'); refresh(); }, // r34 pixel (pruebas)
     setRegaloT(t) { st.regaloT = t; LS.set('cruza_regalo_t', t); refresh(); }, setRio(n) { st.rio = n; LS.set('cruza_rio_caidas', n); },
@@ -5200,6 +5239,197 @@ try { if (window.visualViewport) { let q = 0; visualViewport.addEventListener('r
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
+
+// ---- 10-compartir-pixel.js ----
+// ============================================================
+// 10-compartir-pixel.js — r52 (SOLO Versión Pixel): "Comparte y gana 50 lucas" (diseño aprobado: Revisiones/r52-diseno).
+//  - Fin de partida: botón amarillo "Comparte y gana [50]" (o el oscuro "YA COBRASTE HOY · Compartir mi score" con
+//    "Mañana vuelves a ganar 50 lucas"). Va DENTRO de #premios: en vertical ocupa todo el ancho debajo de Tu cuy/Tómbola/
+//    Caserita (el r37 lo mide como al resto); en apaisado es el primero de la fila. Clase .ui = tocarlo no reinicia.
+//  - Menú: botón COMPARTE arriba a la derecha (bajo el HUD) con la burbuja "¡50 lucas hoy!" mientras haya premio.
+//  - Compartir: tarjeta 1080x1350 dibujada en canvas (cuy con su disfraz, cuadras, distrito con su horizonte, logo,
+//    "¿Me ganas, causa?", link) -> navigator.share({ files, text, url }). Sin archivos: text + url. Sin navigator.share:
+//    copia texto + link al portapapeles y avisa con un toast.
+//  - Premio: +50 lucas como MÁXIMO una vez por día calendario de Lima (cruza_compartir_dia = 'AAAA-MM-DD'), solo si
+//    share() se resuelve (cancelar / AbortError no paga). La copia al portapapeles también cuenta (una vez al día).
+//    Se paga por la misma economía de la tómbola (premios.test.bonus: saldo + lucas ganadas, guardado).
+// El link es PROVISIONAL: SHARE_URL es el ÚNICO lugar a cambiar.
+// ============================================================
+// r52: Game, premios y toast son locales de main() (06-game.js); main() los entrega con shareBind()
+let Game = null, premios = null, toast = () => {};
+function shareBind(o) { Game = o.Game; premios = o.premios; toast = o.toast; setTimeout(shUi, 0); }
+const SHARE_URL = 'https://saricdarko-cloud.github.io/CruzaCausa/';
+const SHARE = {
+  PREMIO: 50, KEY: 'cruza_compartir_dia', REC_KEY: 'cruza_record_distrito', W: 1080, H: 1350,
+  SKY: { centro: 't_skyline', miraflores: 't_skyline_mf', barranco: 't_skyline_br', gamarra: 't_skyline_gm' },
+  CARTEL: { centro: 'CENTRO DE LIMA', miraflores: 'MIRAFLORES', barranco: 'BARRANCO', gamarra: 'GAMARRA' },
+  EN: { centro: 'el Centro de Lima', miraflores: 'Miraflores', barranco: 'Barranco', gamarra: 'Gamarra' },
+  DIAS: ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'],
+  log: null, card: null, busy: false,
+};
+const shLS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { /* sin almacenamiento */ } },
+};
+const shNow = () => (window.__shareNow ? window.__shareNow() : Date.now()); // pruebas: reloj falso
+function shDia(t = shNow()) { // fecha local de Lima AAAA-MM-DD (Lima no tiene horario de verano: UTC-5 fijo de respaldo)
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(t)); }
+  catch (e) { return new Date(t - 5 * 3600e3).toISOString().slice(0, 10); }
+}
+function shDiaSemana(t = shNow()) { const [y, m, d] = shDia(t).split('-').map(Number); return SHARE.DIAS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]; }
+const shDisponible = () => shLS.get(SHARE.KEY, '') !== shDia();
+const shDist = (d) => (SHARE.SKY[d] ? d : 'centro');
+const shUrlVer = () => SHARE_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
+// mensajes (Revisiones/r52-diseno/mensajes.txt): por cuadras, o el de nuevo récord
+function shTexto(n, d, record) {
+  const D = SHARE.EN[shDist(d)];
+  if (record && n > 0) return `¡Nuevo récord! Cuadra ${n} en ${D} 🏆 Ni el serenazgo me chapa. ¿Quién da más, causa?`;
+  if (n < 10) return `Me chapó la combi en la cuadra ${n} 😅 Mi cuy es más lento que trámite en la muni. ¿Tú lo haces mejor, causa?`;
+  if (n < 30) return `Crucé ${n} cuadras en ${D} con mi cuy y su chullo 🐹 Nada mal pa' ser ${shDiaSemana()}. ¿Me ganas, causa?`;
+  if (n < 60) return `${n} cuadras esquivando combis y ticos en ${D} 🚐💨 Ya me siento cobrador de la Javier Prado. ¿Te animas, causa?`;
+  if (n < 100) return `Llegué a la cuadra ${n} en ${D} 🐹 ¿Me ganas, causa? Te espero sentadito con mi emoliente.`;
+  return `¡${n} cuadras, causa! 🔥 Mi cuy ya es leyenda en ${D}. A ver si me alcanzas, que yo no me corro.`;
+}
+const shImg = (src) => new Promise((ok) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ok(null); i.src = src; });
+// tarjeta 1080x1350 (mismo diseño que Revisiones/r52-diseno/tarjeta_v2.png)
+async function shTarjeta(o) {
+  const { W, H } = SHARE, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'), F = (px) => `900 ${px}px "Courier New", Courier, monospace`;
+  const sel = (premios.test.state || {}).sel || 'normal';
+  const [sky, cuy] = await Promise.all([shImg(ASSETS[SHARE.SKY[shDist(o.dist)]] || ASSETS.t_skyline), shImg((sel !== 'normal' && ASSETS['dz_' + sel + '_front']) || ASSETS.cuy_front)]);
+  g.fillStyle = '#2a1a10'; g.fillRect(0, 0, W, H);
+  if (sky) { g.imageSmoothingEnabled = false; const s = Math.max(W / sky.width, 760 / sky.height), w = sky.width * s, h = sky.height * s; g.drawImage(sky, (W - w) / 2, 760 - h, w, h); }
+  const gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, 'rgba(42,26,16,.15)'); gr.addColorStop(0.35, 'rgba(42,26,16,0)'); gr.addColorStop(0.58, 'rgba(42,26,16,.85)'); gr.addColorStop(0.7, '#2a1a10'); gr.addColorStop(1, '#2a1a10');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  const sombra = (txt, x, y, cols, offs) => { cols.forEach((col, i) => { g.fillStyle = col; g.fillText(txt, x + offs[i], y + offs[i]); }); };
+  // logo
+  g.save(); g.translate(W / 2, 190); g.rotate(-3 * Math.PI / 180); g.font = F(130);
+  for (const [t, y] of [['¡CRUZA,', -62], ['CAUSA!', 62]]) sombra(t, 0, y, ['#2a1a10', '#d62828', '#ffd23f'], [14, 7, 0]);
+  g.restore();
+  // cuy
+  if (cuy) { const h = 400, w = cuy.width * h / cuy.height; g.save(); g.shadowColor = 'rgba(42,26,16,.7)'; g.shadowOffsetX = 10; g.shadowOffsetY = 10; g.imageSmoothingEnabled = false; g.drawImage(cuy, (W - w) / 2, 400, w, h); g.restore(); }
+  // textos
+  g.font = F(40); if ('letterSpacing' in g) g.letterSpacing = '4px';
+  sombra(o.menu ? 'MI RÉCORD:' : 'LLEGUÉ A LA', W / 2, 856, ['#000', '#ffd23f'], [4, 0]);
+  if ('letterSpacing' in g) g.letterSpacing = '0px';
+  let fs = 150; g.font = F(fs); const big = 'CUADRA ' + o.n; while (g.measureText(big).width > W - 80 && fs > 60) g.font = F(fs -= 6);
+  sombra(big, W / 2, 952, ['#000', '#d62828', '#fff'], [12, 6, 0]);
+  g.font = F(40); const chip = '📍 ' + SHARE.CARTEL[shDist(o.dist)], cw = g.measureText(chip).width + 60, ch = 72, cx = (W - cw) / 2, cy = 1090 - ch / 2;
+  g.fillStyle = '#000'; g.fillRect(cx + 8, cy + 8, cw, ch); g.fillStyle = '#fff'; g.fillRect(cx - 5, cy - 5, cw + 10, ch + 10);
+  g.fillStyle = '#1d4fd1'; g.fillRect(cx, cy, cw, ch); g.fillStyle = '#fff'; g.fillText(chip, W / 2, 1092);
+  g.font = F(66); sombra('¿Me ganas, causa?', W / 2, 1212, ['#000', '#ffd23f'], [5, 0]);
+  g.font = F(36); g.fillStyle = '#fff'; g.fillText(shUrlVer(), W / 2, 1298);
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/png'));
+  return { canvas: c, blob, file: blob && typeof File === 'function' ? new File([blob], 'cruza-causa.png', { type: 'image/png' }) : null };
+}
+// datos de lo que se comparte: fin de partida = esta carrera; menú = el récord
+function shDatos(menu) {
+  if (menu) return { menu: true, n: Game.best, dist: shLS.get(SHARE.REC_KEY, '') || MF.dist || 'centro', record: false };
+  return { menu: false, n: Game.score, dist: MF.dist || 'centro', record: !!SHARE.isBest };
+}
+// la tarjeta se prepara ANTES del toque (iOS exige llamar a share() dentro del gesto del usuario)
+function shPreparar(menu) {
+  if (!Game) return null; // main() aún no arrancó
+  const o = shDatos(menu), sel = (premios.test.state || {}).sel, k = [o.menu, o.n, o.dist, sel].join('|');
+  if (!SHARE.card || SHARE.card.k !== k) { SHARE.card = { k, o, p: shTarjeta(o).then((r) => (SHARE.card && SHARE.card.k === k ? (SHARE.card.r = r) : r)).catch(() => null) }; }
+  return SHARE.card;
+}
+const shNote = (ev, x) => { if (SHARE.log) SHARE.log.push(Object.assign({ ev, t: shNow() }, x || {})); };
+function shCobrar(via) {
+  if (!shDisponible()) { shNote('sinPremio', { via }); return false; }
+  shLS.set(SHARE.KEY, shDia());
+  premios.test.bonus(SHARE.PREMIO);
+  shNote('premio', { via, n: SHARE.PREMIO, saldo: Game.lucasTotal });
+  shPopup(); shUi(); return true;
+}
+async function shCopiar(txt) {
+  try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(txt); return true; } } catch (e) { /* sigue */ }
+  try { const t = document.createElement('textarea'); t.value = txt; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(t); t.select(); const ok = document.execCommand('copy'); t.remove(); return ok; } catch (e) { return false; }
+}
+async function compartir(menu) {
+  if (!Game) return;
+  if (SHARE.busy) return; SHARE.busy = true;
+  try {
+    const card = shPreparar(menu), o = card.o, text = shTexto(o.n, o.dist, o.record);
+    const r = card.r || await card.p, nav = navigator;
+    if (typeof nav.share === 'function') {
+      let data = { text, url: SHARE_URL }, modo = 'texto';
+      if (r && r.file) { const d = { files: [r.file], text, url: SHARE_URL }; try { if (!nav.canShare || nav.canShare(d)) { data = d; modo = 'archivo'; } } catch (e) { /* sin archivos */ } }
+      try { await nav.share(data); shNote('share', { modo }); shCobrar(modo); return; }
+      catch (e) {
+        if (e && e.name === 'AbortError') { shNote('cancelado', { modo }); return; }
+        shNote('shareError', { modo, err: e && e.name });
+      }
+    }
+    const ok = await shCopiar(text + ' ' + SHARE_URL);
+    shNote('copia', { ok });
+    if (ok) { toast('¡Copiado! Pégalo en WhatsApp o donde quieras, causa'); shCobrar('copia'); } else toast('No se pudo compartir, causa');
+  } finally { SHARE.busy = false; }
+}
+// ---------- interfaz ----------
+function shUi() {
+  if (!Game) return;
+  const libre = shDisponible(), b = $('pzShare'), m = $('pzShareMenu');
+  if (b) {
+    b.classList.toggle('cobrado', !libre);
+    b.innerHTML = libre
+      ? '<span class="ico">📲</span><span><small>¡SOLO HOY!</small><b>Comparte y gana</b></span><span class="shBadge"><span class="coinIco"></span>50</span>'
+      : '<span class="ico">📤</span><span><small>YA COBRASTE HOY</small><b>Compartir mi score</b></span>';
+    $('pzShareNota').classList.toggle('hidden', libre);
+  }
+  if (m) m.querySelector('.shBub').classList.toggle('hidden', !libre);
+}
+function shPopup() {
+  const ov = $('shareOk');
+  $('shareOkTotal').textContent = Game.lucasTotal;
+  ov.classList.remove('hidden');
+  try { Sfx.init(); Sfx.coin(); } catch (e) { /* sin audio */ }
+  const box = ov.querySelector('.mbox').getBoundingClientRect(), hud = $('lucas'), t = (hud.querySelector('.coinIco') || hud).getBoundingClientRect();
+  const sx = box.left + box.width * 0.7, sy = box.top - 10, tx = t.left + t.width / 2, ty = t.top + t.height / 2;
+  for (let i = 0; i < 7; i++) {
+    const c = document.createElement('img'); c.src = ASSETS.coin; c.className = 'shFly'; document.body.appendChild(c);
+    const a = c.animate([{ transform: `translate(${sx - 15}px,${sy - 15}px) scale(1)`, opacity: 1 },
+      { transform: `translate(${(sx + tx) / 2 + 40 - 15}px,${(sy + ty) / 2 - 15}px) scale(.85)`, opacity: 1 },
+      { transform: `translate(${tx - 15}px,${ty - 15}px) scale(.6)`, opacity: 0.4 }], { duration: 750, delay: i * 90, easing: 'ease-in', fill: 'both' });
+    a.onfinish = () => c.remove(); setTimeout(() => c.remove(), 2500);
+  }
+  const p = document.createElement('div'); p.className = 'shMas'; p.textContent = '+' + SHARE.PREMIO;
+  p.style.left = (t.right + 6) + 'px'; p.style.top = (t.bottom + 2) + 'px'; document.body.appendChild(p);
+  setTimeout(() => p.remove(), 2400);
+  hud.classList.remove('shPulse'); void hud.offsetWidth; hud.classList.add('shPulse');
+}
+const shCerrar = () => $('shareOk').classList.add('hidden');
+(() => {
+  const ui = $('premios');
+  const w = document.createElement('div'); w.id = 'pzShareW'; w.className = 'ui';
+  w.innerHTML = '<button id="pzShare" class="pz ui" title="Comparte tu score"></button><div id="pzShareNota" class="ui hidden"><span class="coinIco"></span>Mañana vuelves a ganar 50 lucas</div>';
+  ui.insertBefore(w, ui.firstChild);
+  const m = document.createElement('button'); m.id = 'pzShareMenu'; m.className = 'pz ui'; m.title = 'Comparte tu récord';
+  m.innerHTML = '<span class="ico">📲</span><small>COMPARTE</small><span class="shBub"><span class="coinIco"></span>¡50 lucas hoy!</span>';
+  document.body.appendChild(m);
+  const ok = document.createElement('div'); ok.id = 'shareOk'; ok.className = 'modal ui hidden';
+  ok.innerHTML = `<div class="mbox"><div class="mtitle">¡GRACIAS, CAUSA!</div><div>Compartiste tu score. Aquí tu yapa del día:</div>
+    <div class="result raro"><img src="${ASSETS.coin}" alt=""><div><div class="rcat">PREMIO DEL DÍA</div><div class="rname">+${SHARE.PREMIO} lucas</div><div class="rnote">Ahora tienes <b id="shareOkTotal">0</b> lucas</div></div></div>
+    <button id="shareOkBtn" class="btn">¡Chévere!</button></div>`;
+  document.body.appendChild(ok);
+  const tap = (el, fn) => { el.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); fn(); }); };
+  tap($('pzShare'), () => compartir(false)); tap(m, () => compartir(true)); tap($('shareOkBtn'), shCerrar);
+  ok.addEventListener('click', (e) => { e.stopPropagation(); if (e.target === ok) shCerrar(); });
+  // con el popup abierto, Espacio/Enter/Esc solo lo cierran (no reinician)
+  addEventListener('keydown', (e) => { if (ok.classList.contains('hidden')) return; if (['Space', 'Enter', 'Escape', 'KeyR'].includes(e.code)) { e.preventDefault(); e.stopImmediatePropagation(); shCerrar(); } }, true);
+  shUi(); setInterval(shUi, 30000); // cambia solo al pasar la medianoche de Lima
+  setTimeout(() => { try { shPreparar(true); } catch (e) { /* */ } }, 1500);
+})();
+// ganchos (06-game.js, parche r52): fin de partida
+function shareOnGameOver(isBest) {
+  SHARE.isBest = isBest && Game.score > 0;
+  if (SHARE.isBest) shLS.set(SHARE.REC_KEY, MF.dist || 'centro');
+  shCerrar(); shUi(); try { shPreparar(false); } catch (e) { /* */ }
+}
+window.__cruzaShare = { SHARE_URL, SHARE, dia: shDia, texto: shTexto, disponible: shDisponible, compartir, tarjeta: shTarjeta, preparar: shPreparar, ui: shUi, cerrar: shCerrar,
+  get log() { return SHARE.log; }, set log(v) { SHARE.log = v; } };
 
 })();
 </script>
